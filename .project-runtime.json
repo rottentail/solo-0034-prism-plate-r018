@@ -62,6 +62,10 @@
     {
       "workflow_id": "rejection",
       "command": "python3 scripts/walkthrough.py --workflow rejection"
+    },
+    {
+      "workflow_id": "book",
+      "command": "python3 scripts/walkthrough.py --workflow book"
     }
   ]
 }

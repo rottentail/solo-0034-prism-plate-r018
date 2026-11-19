@@ -56,6 +56,16 @@
       "id": "transport",
       "name": "HTTP契约",
       "path": "internal/transport"
+    },
+    {
+      "id": "impose",
+      "name": "拼版合成与溢出判定",
+      "path": "internal/impose"
+    },
+    {
+      "id": "handover",
+      "name": "逐页移交封包",
+      "path": "internal/handover"
     }
   ],
   "workflows": [
@@ -314,6 +324,29 @@
       "success": "非法场景不占历史，已有图仍可生成",
       "failure": "过量画布或错误渐变400",
       "verification": "python3 scripts/walkthrough.py --workflow rejection"
+    },
+    {
+      "id": "book",
+      "name": "多页拼版校样与离线移交",
+      "entry": "POST /v1/books → POST /v1/books/{id}/render → GET /v1/books/{id}/handover",
+      "module_ids": [
+        "transport",
+        "service",
+        "validate",
+        "scene",
+        "geom",
+        "impose",
+        "raster",
+        "repository",
+        "handover"
+      ],
+      "steps": [
+        "从公开入口解析并获取固定来源",
+        "跨职责计算或判定并提交完整结果"
+      ],
+      "success": "固定页序逐页成像，来源引脚随页可追溯，移交包可离线校验",
+      "failure": "陈旧稿本、错配摘要、跨页拆分与超限页面拒绝",
+      "verification": "python3 scripts/walkthrough.py --workflow book"
     }
   ],
   "complexity": {

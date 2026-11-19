@@ -98,3 +98,25 @@ func (path Path) Contains(p Point, rule string) bool {
 	}
 	return winding != 0
 }
+
+// Construction helpers keep placement composition explicit and testable.
+// The coordinate system is y-down, so a positive angle rotates clockwise.
+func Translate(x, y float64) Matrix   { return Matrix{1, 0, 0, 1, x, y} }
+func ScaleMatrix(x, y float64) Matrix { return Matrix{x, 0, 0, y, 0, 0} }
+func Rotate(degrees float64) Matrix {
+	r := degrees * math.Pi / 180
+	c, s := math.Cos(r), math.Sin(r)
+	return Matrix{c, s, -s, c, 0, 0}
+}
+
+// Multiply returns a∘b: b is applied first, then a.
+func Multiply(a, b Matrix) Matrix {
+	return Matrix{
+		a[0]*b[0] + a[2]*b[1],
+		a[1]*b[0] + a[3]*b[1],
+		a[0]*b[2] + a[2]*b[3],
+		a[1]*b[2] + a[3]*b[3],
+		a[0]*b[4] + a[2]*b[5] + a[4],
+		a[1]*b[4] + a[3]*b[5] + a[5],
+	}
+}

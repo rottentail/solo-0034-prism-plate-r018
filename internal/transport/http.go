@@ -28,7 +28,7 @@ func failure(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, repository.ErrMissing), errors.Is(err, exposure.ErrMissing):
 		status = 404
-	case errors.Is(err, repository.ErrConflict), errors.Is(err, repository.ErrState):
+	case errors.Is(err, repository.ErrConflict), errors.Is(err, repository.ErrState), errors.Is(err, repository.ErrSource):
 		status = 409
 	case errors.Is(err, exposure.ErrBusy):
 		status = 429
@@ -227,6 +227,156 @@ func (a API) Handler() http.Handler {
 			return
 		}
 		jsonOut(w, 200, v)
+	})
+	// Book routes extend the single-plate APIs without changing them.
+	mux.HandleFunc("POST /v1/books", func(w http.ResponseWriter, r *http.Request) {
+		var q struct {
+			ID    string       `json:"id"`
+			Title string       `json:"title"`
+			Pages []scene.Page `json:"pages"`
+		}
+		if e := decode(w, r, &q); e != nil {
+			failure(w, e)
+			return
+		}
+		b, e := a.Service.CreateBook(q.ID, q.Title, q.Pages)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 201, b)
+	})
+	mux.HandleFunc("GET /v1/books/{id}", func(w http.ResponseWriter, r *http.Request) {
+		b, e := a.Service.Book(r.PathValue("id"))
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 200, b)
+	})
+	mux.HandleFunc("PUT /v1/books/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var q struct {
+			Expected int          `json:"expected_revision"`
+			Pages    []scene.Page `json:"pages"`
+		}
+		if e := decode(w, r, &q); e != nil {
+			failure(w, e)
+			return
+		}
+		b, e := a.Service.ReviseBook(r.PathValue("id"), q.Expected, q.Pages)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 200, b)
+	})
+	mux.HandleFunc("POST /v1/books/{id}/reorder", func(w http.ResponseWriter, r *http.Request) {
+		var q struct {
+			Expected int   `json:"expected_revision"`
+			Order    []int `json:"order"`
+		}
+		if e := decode(w, r, &q); e != nil {
+			failure(w, e)
+			return
+		}
+		b, e := a.Service.ReorderBook(r.PathValue("id"), q.Expected, q.Order)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 201, b)
+	})
+	mux.HandleFunc("POST /v1/books/{id}/archive", func(w http.ResponseWriter, r *http.Request) {
+		if e := a.Service.ArchiveBook(r.PathValue("id")); e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 200, map[string]string{"state": "archived"})
+	})
+	mux.HandleFunc("POST /v1/books/{id}/render", func(w http.ResponseWriter, r *http.Request) {
+		n, e := revision(r)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
+		defer cancel()
+		var page int
+		if raw := r.URL.Query().Get("page"); raw != "" {
+			page, e = strconv.Atoi(raw)
+			if e != nil || page < 1 {
+				failure(w, fmt.Errorf("positive page required"))
+				return
+			}
+			v, created, e := a.Service.RenderPage(ctx, r.PathValue("id"), n, page)
+			if e != nil {
+				failure(w, e)
+				return
+			}
+			v.Data = nil
+			status := 200
+			if created {
+				status = 201
+			}
+			jsonOut(w, status, map[string]any{"page": v, "created": created})
+			return
+		}
+		v, e := a.Service.RenderBook(ctx, r.PathValue("id"), n)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		for i := range v {
+			v[i].Data = nil
+		}
+		jsonOut(w, 201, map[string]any{"book_revision": n, "pages": v})
+	})
+	mux.HandleFunc("GET /v1/pages/{id}", func(w http.ResponseWriter, r *http.Request) {
+		v, e := a.Service.PageArtifact(r.PathValue("id"))
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		w.Header().Set("ETag", `"`+v.Digest+`"`)
+		w.Header().Set("X-Book-Digest", v.BookDigest)
+		w.Header().Set("X-Page", strconv.Itoa(v.Page))
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		w.Header().Set("Content-Type", "image/png")
+		if r.Header.Get("If-None-Match") == `"`+v.Digest+`"` {
+			w.WriteHeader(304)
+			return
+		}
+		_, _ = w.Write(v.Data)
+	})
+	mux.HandleFunc("DELETE /v1/pages/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if e := a.Service.RevokePage(r.PathValue("id")); e != nil {
+			failure(w, e)
+			return
+		}
+		jsonOut(w, 200, map[string]string{"state": "revoked"})
+	})
+	mux.HandleFunc("GET /v1/books/{id}/handover", func(w http.ResponseWriter, r *http.Request) {
+		n, e := revision(r)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
+		defer cancel()
+		raw, m, e := a.Service.Handover(ctx, r.PathValue("id"), n)
+		if e != nil {
+			failure(w, e)
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-r%d-handover.zip"`, m.Book.ID, m.Book.Revision))
+		w.Header().Set("ETag", `"`+m.Book.Digest+`"`)
+		w.Header().Set("X-Book-Digest", m.Book.Digest)
+		if r.Header.Get("If-None-Match") == `"`+m.Book.Digest+`"` {
+			w.WriteHeader(304)
+			return
+		}
+		_, _ = w.Write(raw)
 	})
 	mux.HandleFunc("GET /v1/plates/{id}/bundle", func(w http.ResponseWriter, r *http.Request) {
 		v, e := a.Service.Export(r.PathValue("id"))

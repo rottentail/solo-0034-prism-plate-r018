@@ -1,0 +1,76 @@
+{
+  "id": "review-book-a",
+  "title": "秋季审稿拼版甲",
+  "pages": [
+    {
+      "width": 240,
+      "height": 180,
+      "background": {
+        "r": 0.9,
+        "g": 0.9,
+        "b": 0.88,
+        "a": 1
+      },
+      "safe_margin": 12,
+      "placements": [
+        {
+          "plate": "amber-plate",
+          "revision": 1,
+          "x": 16,
+          "y": 16,
+          "width": 192,
+          "height": 144,
+          "rotation": 0,
+          "fit": "contain"
+        }
+      ]
+    },
+    {
+      "width": 240,
+      "height": 180,
+      "background": {
+        "r": 0.9,
+        "g": 0.9,
+        "b": 0.88,
+        "a": 1
+      },
+      "safe_margin": 12,
+      "placements": [
+        {
+          "plate": "amber-plate",
+          "revision": 1,
+          "x": 20,
+          "y": 40,
+          "width": 160,
+          "height": 120,
+          "rotation": 90,
+          "fit": "cover"
+        }
+      ]
+    },
+    {
+      "width": 240,
+      "height": 180,
+      "background": {
+        "r": 0.9,
+        "g": 0.9,
+        "b": 0.88,
+        "a": 1
+      },
+      "safe_margin": 12,
+      "placements": []
+    },
+    {
+      "width": 240,
+      "height": 180,
+      "background": {
+        "r": 0.82,
+        "g": 0.82,
+        "b": 0.8,
+        "a": 1
+      },
+      "safe_margin": 12,
+      "placements": []
+    }
+  ]
+}

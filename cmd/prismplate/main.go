@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"prismplate/internal/handover"
 	"prismplate/internal/repository"
 	"prismplate/internal/service"
 	"prismplate/internal/transport"
@@ -14,6 +17,24 @@ import (
 	"syscall"
 	"time"
 )
+
+// verifyHandover checks a delivered archive without touching any data root.
+func verifyHandover(name string) error {
+	raw, err := os.ReadFile(name)
+	if err != nil {
+		return err
+	}
+	m, err := handover.Verify(raw)
+	if err != nil {
+		return err
+	}
+	out, _ := json.Marshal(map[string]any{
+		"book": m.Book.ID, "revision": m.Book.Revision, "pages": len(m.Pages),
+		"sources": len(m.Sources), "digest": m.Book.Digest,
+	})
+	fmt.Println(string(out))
+	return nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -24,7 +45,11 @@ func main() {
 func run() error {
 	addr := flag.String("listen", "127.0.0.1:7846", "HTTP address")
 	root := flag.String("data", "var/prism-plate-v1", "persistent snapshot root")
+	verify := flag.String("verify-handover", "", "verify a handover ZIP offline, then exit")
 	flag.Parse()
+	if *verify != "" {
+		return verifyHandover(*verify)
+	}
 	repo, err := repository.Open(*root)
 	if err != nil {
 		return err
